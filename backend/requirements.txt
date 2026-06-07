@@ -1,0 +1,8 @@
+debugpy>=1.8.0
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+sse-starlette==2.1.3
+python-dotenv==1.0.1
+pydantic==2.9.2
+openai>=1.30.0           # OpenAI-compatible SDK used by zen_runner.py
+ddgs>=9.0                # DuckDuckGo search (no API key needed)
