@@ -111,7 +111,6 @@ Parallel agent detection is pure: `groupSiblings()` in `treeBuilder.ts` sorts no
 | Mode | File | Notes |
 |---|---|---|
 | `ZEN_MODE=true` | `zen_runner.py` | OpenAI SDK → OpenCode Zen gateway → any model |
-| `ZEN_MODE=false` | `agent_runner.py` | Placeholder for Claude Agent SDK integration |
 
 The Zen runner uses the **OpenAI SDK** (not Anthropic SDK) because non-Claude models require OpenAI tool format `{type: "function", function: {...}}`.
 
