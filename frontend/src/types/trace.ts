@@ -29,6 +29,7 @@ export interface TraceNode {
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
+  agentName?: string   // name of the root agent that produced this message
   text: string
   artifacts: Artifact[]
   timestamp: number

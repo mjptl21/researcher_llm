@@ -52,14 +52,16 @@ function routeEvent(event: TraceEvent, dispatch: ReturnType<typeof useAppDispatc
       const state = store.getState()
       const allArtifacts = state.trace.allArtifacts
       let responseText = 'Research complete.'
+      let respAgentName: string | undefined
       for (const node of Object.values(state.trace.nodes)) {
         const resp = [...node.events].reverse().find(e => e.type === 'agent_response')
         if (resp) {
           responseText = (resp as Extract<TraceEvent, { type: 'agent_response' }>).payload.text
+          respAgentName = node.name
           break
         }
       }
-      dispatch(addAssistantMessage({ text: responseText, artifacts: allArtifacts }))
+      dispatch(addAssistantMessage({ text: responseText, artifacts: allArtifacts, agentName: respAgentName }))
       dispatch(setStatus('done'))
       dispatch(setLiveStatus(''))
       // Snapshot immediately so localStorage captures pastRuns before a page refresh.

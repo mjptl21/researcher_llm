@@ -27,10 +27,11 @@ const chatSlice = createSlice({
       })
     },
 
-    addAssistantMessage(state, action: PayloadAction<{ text: string; artifacts: Artifact[] }>) {
+    addAssistantMessage(state, action: PayloadAction<{ text: string; artifacts: Artifact[]; agentName?: string }>) {
       state.messages.push({
         id: `msg-${Date.now()}`,
         role: 'assistant',
+        agentName: action.payload.agentName,
         text: action.payload.text,
         artifacts: action.payload.artifacts,
         timestamp: Date.now(),

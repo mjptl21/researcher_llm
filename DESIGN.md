@@ -26,7 +26,7 @@ A full-stack **agent-transparent chat application** (Domain A: "Deep Analyst") w
 - A **multi-agent research pipeline** (lead-analyst → 3 parallel web-researchers → data-analyst → report-writer) runs on a Python FastAPI backend.
 - Every internal event the pipeline emits — agent spawns, tool calls, thinking deltas, artifacts — is streamed to the browser over **Server-Sent Events** using a discriminated-union event schema (12 event types).
 - A **React + Redux** frontend renders the full agent tree in real time, grouping siblings that run concurrently into a parallel-group widget, and auto-collapsing completed nodes.
-- A **dummy runner** (zero API calls) lets the entire system be demoed without credentials; a **Zen runner** swaps in any real LLM (DeepSeek, Claude, etc.) via the OpenCode Zen OpenAI-compatible gateway.
+- A **Zen runner** connects to any real LLM (DeepSeek, Claude, etc.) via the OpenCode Zen OpenAI-compatible gateway, with a placeholder `agent_runner` for future Claude Agent SDK integration.
 
 ---
 
@@ -37,8 +37,7 @@ A full-stack **agent-transparent chat application** (Domain A: "Deep Analyst") w
 - **G3** Persist the last 5 completed runs across page refreshes via localStorage.
 - **G4** Reconnect a dropped SSE stream and replay missed events from a server-side buffer without user action.
 - **G5** Surface a retry button on error; re-run the last query with one click.
-- **G6** Ship a dummy runner that produces the same 12 event types as the real runner, covering three fixture scenarios: full run, ask-user pause, and error.
-- **G7** Reach ≥ 30 unit tests covering the event decoder and agent-tree builder.
+- **G6** Reach ≥ 30 unit tests covering the event decoder and agent-tree builder.
 
 ---
 

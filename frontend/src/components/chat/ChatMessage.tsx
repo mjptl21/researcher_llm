@@ -21,7 +21,7 @@ export function ChatMessage({ message }: Props) {
       <div className="max-w-[90%] px-4 py-3 bg-gray-800 border border-gray-700 text-gray-100 rounded-2xl rounded-tl-sm text-sm">
         <div className="flex items-center gap-2 mb-2">
           <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 shrink-0" />
-          <span className="text-xs text-gray-400 font-medium">lead-analyst</span>
+          <span className="text-xs text-gray-400 font-medium">{message.agentName ?? 'assistant'}</span>
         </div>
         <p className="leading-relaxed whitespace-pre-wrap">{message.text}</p>
         {message.artifacts.length > 0 && (
