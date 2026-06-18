@@ -40,8 +40,7 @@ Open http://localhost:5173, type any query, and watch the agent tree build in re
 
 | Variable | Default | Description |
 |---|---|---|
-| `ZEN_MODE` | `true` | Real LLM via OpenCode Zen gateway |
-| `ZEN_API_KEY` | — | Required when `ZEN_MODE=true` |
+| `ZEN_API_KEY` | — | **Required** — models are served by OpenCode Zen |
 | `ZEN_MODEL` | `deepseek-v4-flash-free` | Any Zen-supported model slug |
 | `ZEN_BASE_URL` | `https://opencode.ai/zen/v1` | Override for self-hosted Zen |
 | `FRONTEND_ORIGIN` | `http://localhost:5173` | CORS allowed origin |
@@ -106,13 +105,36 @@ Twelve discriminated-union event types shared by all runners and the frontend:
 
 Parallel agent detection is pure: `groupSiblings()` in `treeBuilder.ts` sorts nodes by `startedAt` and detects overlap with `completedAt ?? Infinity` — no agent names hardcoded.
 
-### Backend Runners
+### Backend Runner
 
-| Mode | File | Notes |
-|---|---|---|
-| `ZEN_MODE=true` | `zen_runner.py` | OpenAI SDK → OpenCode Zen gateway → any model |
+| File | Notes |
+|---|---|
+| `openhands_runner.py` | **OpenHands Agent SDK** harness → models via **OpenCode Zen** gateway |
 
-The Zen runner uses the **OpenAI SDK** (not Anthropic SDK) because non-Claude models require OpenAI tool format `{type: "function", function: {...}}`.
+The backend separates the two concerns the way the reviewer architecture prescribes:
+
+- **Agent harness — OpenHands SDK.** Each pipeline stage (lead-analyst, web-researcher ×3, data-analyst, report-writer) is an SDK `Conversation`. The harness owns the agent loop: tool dispatch, message history, termination (`finish` tool), and error events. SDK events (`ActionEvent`, `ObservationEvent`, `MessageEvent`, `AgentErrorEvent`) are translated to the app's 12-type SSE schema via conversation callbacks.
+- **Models — OpenCode Zen.** The SDK's `LLM` is pointed at the Zen OpenAI-compatible gateway (`openai/<ZEN_MODEL>` + `ZEN_BASE_URL`), so any Zen-supported model (DeepSeek, Claude, Qwen, …) works without code changes.
+
+### Agent Definitions — an OpenHands SDK plugin
+
+Agent system prompts are **not hardcoded in Python**. They ship as a proper **OpenHands SDK plugin** — a self-contained directory with a manifest and an `agents/` folder of markdown definitions:
+
+```
+backend/deep-analyst-plugin/
+  .plugin/plugin.json   # plugin manifest (name, version, description, author)
+  agents/
+    lead-analyst.md     # orchestrator — decomposes into 3 subtopics, may ask_user
+    web-researcher.md   # web_search + write_file on one subtopic
+    data-analyst.md     # metrics extraction → analysis-summary.md
+    report-writer.md    # final synthesis → research-brief.md
+  .mcp.json             # MCP servers (none — tools are registered in Python)
+  README.md
+```
+
+Each agent file declares `name`, `description`, and allowed `tools` in YAML frontmatter; the markdown body is the system prompt. The runner loads the plugin once at import with the SDK's `Plugin.load()`, which parses the manifest and turns each `agents/*.md` into an `AgentDefinition` (and surfaces any MCP config / hooks the plugin declares). Editing a prompt requires no Python changes.
+
+Custom tools (`web_search` via DuckDuckGo, `write_file`, `ask_user`) are Python `ToolDefinition` classes registered with the SDK's `register_tool()` and referenced by name from the agent frontmatter (plugins bundle agents/skills/hooks/MCP — not Python tool classes).
 
 ### SSE Reconnect & Replay
 
@@ -125,10 +147,10 @@ Every emitted event is appended to a per-session `event_buffer` list. On reconne
 | # | Limitation | Impact |
 |---|------------|--------|
 | L1 | **In-memory session store** — sessions live in a Python process dict | Single-worker only; restart loses all in-flight runs; not suitable for multi-process deployment (fix: Redis-backed session store) |
-| L2 | **Web search is stubbed** — `zen_runner._handle_web_search()` returns simulated results | The Zen runner does not make real HTTP requests; research output is LLM-generated from its training data, not live web data |
+| L2 | **Web search has no rate-limit handling** — `web_search` uses DuckDuckGo (`ddgs`) without backoff | Heavy parallel querying can get temporarily rate-limited; the tool returns an error result and the researcher continues with whatever it has |
 | L3 | **No multi-worker scaling** — `asyncio.Queue` objects can't cross process boundaries | `uvicorn --workers N` with N > 1 will 404 stream requests that land on a different worker than the one that created the session |
 | L4 | **localStorage quota** — `snapshotCurrentRun` stores full node event arrays | Very long runs (hundreds of tool calls) can exceed the 5 MB localStorage quota; the save is silently dropped; no user feedback |
-| L5 | **Streaming tool calls model-dependent** — `tool_calls_acc` delta accumulation tested only with `deepseek-v4-flash-free` | Other Zen-supported models may emit tool-call deltas in a different shape, causing `tool_calls_acc` to mis-parse and the runner to stall |
+| L5 | **Thinking is not token-streamed** — the OpenHands harness delivers agent thoughts per turn, not per token | `thinking` events arrive as whole chunks (`delta: false`) rather than a live typing effect; the UI renders them identically |
 | L6 | **No authentication** — all endpoints are unauthenticated | Anyone who can reach port 8000 can start sessions and read SSE streams |
 | L7 | **`beforeunload` flush missing** — localStorage is written 800 ms after the last Redux action | Closing the tab within 800 ms of a run completing loses the past-run card (the run is in Redux but not yet persisted) |
 | L8 | **Mobile layout unsupported** — split panel requires ≥ 900 px viewport | Below that width the chat panel fills the screen and the trace panel is hidden |

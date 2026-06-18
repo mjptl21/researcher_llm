@@ -26,7 +26,8 @@ A full-stack **agent-transparent chat application** (Domain A: "Deep Analyst") w
 - A **multi-agent research pipeline** (lead-analyst → 3 parallel web-researchers → data-analyst → report-writer) runs on a Python FastAPI backend.
 - Every internal event the pipeline emits — agent spawns, tool calls, thinking deltas, artifacts — is streamed to the browser over **Server-Sent Events** using a discriminated-union event schema (12 event types).
 - A **React + Redux** frontend renders the full agent tree in real time, grouping siblings that run concurrently into a parallel-group widget, and auto-collapsing completed nodes.
-- A **Zen runner** connects to any real LLM (DeepSeek, Claude, etc.) via the OpenCode Zen OpenAI-compatible gateway, with a placeholder `agent_runner` for future Claude Agent SDK integration.
+- Agents run on the **OpenHands Agent SDK** harness (conversations, tool dispatch, termination), with models served by the **OpenCode Zen** OpenAI-compatible gateway — any Zen model (DeepSeek, Claude, etc.) works without code changes.
+- Agent definitions (system prompt + allowed tools) ship as an **OpenHands SDK plugin** in `backend/deep-analyst-plugin/` (manifest + `agents/*.md`), loaded at run time via `Plugin.load()` — no prompts hardcoded in Python.
 
 ---
 
@@ -56,7 +57,7 @@ A full-stack **agent-transparent chat application** (Domain A: "Deep Analyst") w
 | # | Question | Current stance |
 |---|----------|----------------|
 | OQ-1 | Should the agent tree support more than one level of nesting (grandchild agents)? | Not implemented. `TraceNode.children` is a flat list of IDs; deeper nesting would require a recursive `parentId` chain already present in the data model but untested at depth > 2. |
-| OQ-2 | Can the Zen runner use streaming tool calls reliably across all Zen-supported models? | Tested only with `deepseek-v4-flash-free`. Other models may emit tool-call deltas in different chunk shapes; `tool_calls_acc` accumulation logic may need adjustment. |
+| OQ-2 | Does the OpenHands harness behave consistently across all Zen-supported models? | Tested with `deepseek-v4-flash-free`. Tool-calling is delegated to the harness (litellm), which normalizes provider differences, but other model slugs have not been exercised end-to-end. |
 | OQ-3 | Should past runs be exportable (download as JSON / markdown)? | Not in scope for v1; the `RunSummary` data structure contains everything needed for a download button. |
 | OQ-4 | Is an 800 ms localStorage debounce safe if the user closes the tab immediately after a run? | Risk is accepted for v1. The `snapshotCurrentRun` action now writes synchronously to Redux on `done`; the 800 ms save to disk is the only window where data can be lost on hard close. A `beforeunload` flush would close this gap. |
 | OQ-5 | Should the frontend validate incoming SSE events against the schema at runtime? | Currently only the `type` field is validated against `KNOWN_EVENT_TYPES`. Full runtime validation (e.g. with Zod) would catch malformed payloads from future runner changes but adds bundle size. |

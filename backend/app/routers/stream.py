@@ -1,5 +1,4 @@
 import asyncio
-import os
 import time
 from uuid import uuid4
 
@@ -13,19 +12,11 @@ from app.session_manager import (
 
 router = APIRouter()
 
-DUMMY_MODE = os.getenv("DUMMY_MODE", "true").lower() == "true"
-ZEN_MODE   = os.getenv("ZEN_MODE", "false").lower() == "true"
-
-
 def _get_runner():
-    if DUMMY_MODE:
-        from app.dummy_runner import run_dummy
-        return run_dummy
-    if ZEN_MODE:
-        from app.zen_runner import run_zen
-        return run_zen
-    from app.agent_runner import run_agent
-    return run_agent
+    # Single runner: agents run on the OpenHands Agent SDK harness,
+    # with models served by OpenCode Zen.
+    from app.openhands_runner import run_openhands
+    return run_openhands
 
 
 def _ts() -> str:

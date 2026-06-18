@@ -1,8 +1,8 @@
 debugpy>=1.8.0
-fastapi==0.115.0
+fastapi>=0.136              # needs starlette>=1.x pulled in by openhands-sdk
 uvicorn[standard]==0.30.6
 sse-starlette==2.1.3
 python-dotenv==1.0.1
-pydantic==2.9.2
-openai>=1.30.0           # OpenAI-compatible SDK used by zen_runner.py
-ddgs>=9.0                # DuckDuckGo search (no API key needed)
+pydantic>=2.11               # openhands-sdk requires a newer pydantic than 2.9
+openhands-sdk>=1.28.1        # agent harness — runs the agents (openhands_runner.py)
+ddgs>=9.0                    # DuckDuckGo search — web_search tool (no API key needed)

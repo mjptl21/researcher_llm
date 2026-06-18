@@ -1,0 +1,8 @@
+{
+  "name": "deep-analyst",
+  "version": "1.0.0",
+  "description": "Multi-agent research pipeline: a lead-analyst orchestrates parallel web-researchers, a data-analyst, and a report-writer. Models served by OpenCode Zen.",
+  "author": {
+    "name": "Mishal Patel"
+  }
+}
