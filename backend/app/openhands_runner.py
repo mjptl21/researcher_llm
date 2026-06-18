@@ -5,8 +5,14 @@ models are served by OpenCode Zen (OpenAI-compatible gateway).
 Architecture:
   - Agent definitions ship as an OpenHands SDK plugin in
     backend/deep-analyst-plugin/ (a .plugin/plugin.json manifest plus an
-    agents/*.md folder). The plugin is loaded once via Plugin.load(), exposing
-    one AgentDefinition (system prompt + allowed tools) per pipeline stage.
+    agents/*.md folder).
+  - The plugin is installed once into backend/.installed-plugins/ via
+    install_plugin(), then loaded via load_installed_plugins(). This follows
+    the standard SDK plugin lifecycle (install → list → load → enable/disable
+    → uninstall) rather than the bare Plugin.load() static call.
+  - A PluginSource pointing at the local directory is passed to each
+    Conversation so the SDK resolves plugin-level MCP config and hooks at
+    runtime, consistent with how remote plugins are consumed.
   - Each pipeline stage is an SDK Conversation run in a worker thread
     (Conversation.run() is synchronous); SDK events are translated to the
     app's 12-type SSE event schema via conversation callbacks and pushed
@@ -45,7 +51,12 @@ from openhands.sdk.event import (
     MessageEvent,
     ObservationEvent,
 )
-from openhands.sdk.plugin import Plugin
+from openhands.sdk.plugin import (
+    PluginSource,
+    install_plugin,
+    list_installed_plugins,
+    load_installed_plugins,
+)
 from openhands.sdk.tool import Action, Observation, ToolDefinition, ToolExecutor
 
 # ── config ────────────────────────────────────────────────────────────────────
@@ -54,23 +65,41 @@ ZEN_API_KEY  = os.getenv("ZEN_API_KEY", "")
 ZEN_BASE_URL = os.getenv("ZEN_BASE_URL", "https://opencode.ai/zen/v1")
 ZEN_MODEL    = os.getenv("ZEN_MODEL", "deepseek-v4-flash-free")
 
-# The agents ship as an OpenHands SDK plugin: a directory with a
-# .plugin/plugin.json manifest and an agents/ folder of markdown definitions.
-PLUGIN_DIR = Path(__file__).resolve().parent.parent / "deep-analyst-plugin"
+# The agents ship as a local plugin directory.
+PLUGIN_DIR    = Path(__file__).resolve().parent.parent / "deep-analyst-plugin"
+# Persistent install location — survives restarts; holds .installed.json metadata.
+INSTALLED_DIR = Path(__file__).resolve().parent.parent / ".installed-plugins"
 
 # Per-session context for tool executors, keyed by session working dir.
 # Executors run on conversation worker threads and only receive the
 # conversation object, so they look up the session through its workspace.
 _SESSION_CTX: dict[str, dict[str, Any]] = {}
 
-# The plugin is static, so load it once. Plugin.load() parses the manifest and
-# the agents/ markdown files into AgentDefinition objects, and reads any MCP
-# config / hooks the plugin declares.
-_PLUGIN = Plugin.load(PLUGIN_DIR)
+# ── plugin lifecycle (install → load) ────────────────────────────────────────
+# install_plugin() is idempotent: skip if already tracked to avoid re-copying
+# on every server restart.
+INSTALLED_DIR.mkdir(parents=True, exist_ok=True)
+_tracked = {info.name for info in list_installed_plugins(installed_dir=INSTALLED_DIR)}
+if "deep-analyst" not in _tracked:
+    install_plugin(source=str(PLUGIN_DIR), installed_dir=INSTALLED_DIR)
+
+# Load only enabled plugins (respects the enabled flag in .installed.json).
+_loaded_plugins = load_installed_plugins(installed_dir=INSTALLED_DIR)
+_PLUGIN = next((p for p in _loaded_plugins if p.name == "deep-analyst"), None)
+if _PLUGIN is None:
+    raise RuntimeError(
+        f"deep-analyst plugin not found in {INSTALLED_DIR}. "
+        "Check that install_plugin() succeeded and the plugin is enabled."
+    )
+
 _AGENT_DEFS = {d.name: d for d in _PLUGIN.agents}
 # Only forward MCP config when the plugin actually declares servers.
 _MCP_CONFIG = _PLUGIN.mcp_config if (_PLUGIN.mcp_config or {}).get("mcpServers") else {}
 _HOOK_CONFIG = _PLUGIN.hooks
+
+# PluginSource passed to each Conversation so the SDK can resolve plugin-level
+# MCP config and hooks at runtime (mirrors how a remote plugin would be consumed).
+_PLUGIN_SOURCE = PluginSource(source=str(PLUGIN_DIR))
 
 _REQUIRED_AGENTS = {"lead-analyst", "web-researcher", "data-analyst", "report-writer"}
 _missing = _REQUIRED_AGENTS - set(_AGENT_DEFS)
@@ -383,6 +412,7 @@ async def _run_conversation(
             visualizer=None,
             hook_config=_HOOK_CONFIG,
             max_iteration_per_run=_STAGE_MAX_ITERATIONS,
+            plugins=[_PLUGIN_SOURCE],
         )
         try:
             conv.send_message(user_message)
